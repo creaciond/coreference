@@ -1,6 +1,7 @@
 import os
 import re
 from pymorphy2 import MorphAnalyzer
+from pymorphy2 import tokenizers
 
 
 def open_texts_info():
@@ -57,38 +58,121 @@ def original_paragraphs(path):
     return or_paragraphs
 
 
-def set_borders(or_paragraphs, sem_sentences):
-    paragraphs = []
-    sentences = [sentence.split('\n') for sentence in sem_sentences]
-    # sentences structure: [[str, str, str], [str, str], [str]]
+def tokenize_and_morphology(or_paragraphs, morph):
+    paragraphs_with_morpho = []
     for or_paragraph in or_paragraphs:
-        last_word = or_paragraph.split(' ')[-1].strip('.?!\":;»')
-        last_pos = 0
-        for sentence in sentences:
-            if sentence != '':
-                last_word_in_sentence = sentence[-1].split('\t')[1].split('=')[1]
-                if last_word_in_sentence == last_word:
-                    this_index = sentences.index(sentence)
-                    paragraphs.append(sentences[last_pos:this_index])
-    return paragraphs
+        tokens = tokenizers.simple_word_tokenize(or_paragraph)
+        tokens_with_morpho = {}
+        for token in tokens:
+            analysis = str(morph.parse(token)[0].tag)
+            tokens_with_morpho[token] = []
+            tokens_with_morpho[token].append(analysis)
+        paragraphs_with_morpho.append(tokens_with_morpho)
+    # return
+    return paragraphs_with_morpho
 
 
-def split_into_paragraphs(folder_path, file_name, text_params):
-    # 0. initialization
-    paragraphs = []
-    # 1. open parsed file
-    file_path = folder_path + os.sep + file_name
-    with open(file_path, 'r', encoding='utf-8') as f_semantics:
-        sem_sentences = f_semantics.read().split('\n\n')
-    # 2.1. assemble path
+def split_into_paragraphs(file_name, text_params):
+    # 1. assemble path
     f_name = clean_filename(file_name)
     original_path = '..' + os.sep + '..' + os.sep + 'RuCor_original' + os.sep + 'rucoref_texts'
     original_file = original_path + os.sep + text_params[f_name][0] + os.sep + f_name
-    # 2.2. retrieve normal paragraphs
+    # 2. retrieve normal paragraphs
     true_paragraphs = original_paragraphs(original_file)
-    # 3. return paragraphs
-    whatever = set_borders(true_paragraphs, sem_sentences)
+    # 3. tokenize paragraphs + add morphology
+    morph = MorphAnalyzer()
+    paragraphs_morpho = tokenize_and_morphology(true_paragraphs, morph)
+    return paragraphs_morpho
 
+
+def semantics_and_syntax(folder_path, file_name, paragraphs_morph):
+    file_path = folder_path + os.sep + file_name
+    with open(file_path, 'r', encoding='utf-8') as f_semantics:
+        analyses = [line.strip('\n') for line in f_semantics.readlines()]
+    for analysis in analyses:
+        if analysis != '':
+            items_analysis = analysis.split('\t')
+            wordform = items_analysis[1].split('=')[1]
+            for paragraph in paragraphs_morph:
+                if wordform in paragraph.keys():
+                    try:
+                        # no ParentOffset = -1 characteristic
+                        if 'ParentOffset' not in analysis:
+                            lemma = str(items_analysis[2].split('=')[1])
+                            surf_slot = str(items_analysis[5].split('=')[1])
+                            sem_slot = str(items_analysis[6].split('=')[1])
+                        else:
+                            lemma = str(items_analysis[3].split('=')[1])
+                            surf_slot = str(items_analysis[6].split('=')[1])
+                            sem_slot = str(items_analysis[7].split('=')[1])
+                        morpho = str(paragraph[wordform][0])
+                        paragraph[wordform] = [lemma, morpho, sem_slot, surf_slot]
+                    except:
+                        buf = 1
+    return paragraphs_morph
+
+
+def do_xml(paragraphs):
+    xml_ar = []
+    sentence_count = 1
+    word_count = 1
+    xml_ar.append("<paragraphs>")
+    for paragraph_count in range(len(paragraphs)):
+        xml_ar.append('<paragraph id=\"%d\">' % (paragraph_count + 1))
+        for sentence in paragraphs[paragraph_count]:
+            # <sentence>
+            xml_ar.append('<sentence id=\"%d\">' % sentence_count)
+            # <source></source>
+            source = ' '.join(sentence.keys())
+            xml_ar.append('<source>'+ source + '</source>')
+            # <tokens>
+            xml_ar.append('<tokens>')
+            for key in paragraphs[paragraph_count].keys():
+                # <token>
+                xml_ar.append('<token text=\"%s\" id=\"%d\">' % (key, word_count))
+                word_count += 1
+                # <tfr>
+                xml_ar.append('<tfr t=\"%s\" rev_id=\"@@@_@@"\>' % key)
+                # <v>
+                xml_ar.append('</v>')
+                # <l>
+                xml_ar.append('<l t=\"%s\" id=\"@@\">' % paragraphs[paragraph_count][key][0])
+                # grammemes
+                tags = re.split('[ ,]',  paragraphs[paragraph_count][key][1])
+                for tag in tags:
+                    xml_ar.append('<g v=\"%s\" />' % tag)
+                # semantics (if any)
+                # syntax (if any)
+                try:
+                    xml_ar.append('<sc v=\"%s\" />' % paragraphs[paragraph_count][key][2])
+                    xml_ar.append('<sc v=\"%s\" />' % paragraphs[paragraph_count][key][3])
+                except:
+                    buf = 1
+                # </l>
+                xml_ar.append('</l>')
+                # </v>
+                xml_ar.append('</v>')
+                # </tfr>
+                xml_ar.append('</tfr>')
+                # </token>
+                xml_ar.append('</token>')
+            # </tokens>
+            xml_ar.append('</tokens>')
+            # </sentence>
+            xml_ar.append('</sentence>')
+            sentence_count += 1
+        xml_ar.append('</paragraph>')
+    xml_ar.append('</paragraphs>')
+    xml_ar.append('</text>')
+    return '\n'.join(xml_ar)
+
+
+def save_new_file(folder, file_name, ready_xml):
+    if not os.path.exists(folder):
+        os.makedirs(folder)
+    # save file
+    with open(folder + os.sep + file_name, 'w', encoding='utf-8') as f_write:
+        f_write.write(ready_xml)
 
 
 def main():
@@ -103,16 +187,18 @@ def main():
         if file.endswith('.csv'):
             # 1. head and metainformation
             head_xml, text_count = head(text_params, file, text_count)
-            # 2. divide into paragraphs
-            paragraph_count = 1
-            split_into_paragraphs(semantics_path, file, text_params)
-            # 3. assemble sentences
-            sentence_count = 1
-            # 4. create tags for words
-            word_count = 1
-            # 5. final tags
-            # 6. assemble
-            # 7. save
+            # 2. divide into paragraphs + add morphology
+            paragraphs = split_into_paragraphs(file, text_params)
+            paragraphs = semantics_and_syntax(semantics_path, file, paragraphs)
+            # 3. create tags
+            ready_xml = do_xml(paragraphs)
+            # 4. assemble
+            final_xml = head_xml + ready_xml
+            # 5. save
+            target_path = '..' + os.sep + '..' + os.sep + 'RuCor_new'
+            filename = clean_filename(file)
+            save_new_file(target_path, filename, final_xml)
+            print(filename)
 
 
 if __name__ == '__main__':
