@@ -88,27 +88,26 @@ def split_into_paragraphs(file_name, text_params):
 def semantics_and_syntax(folder_path, file_name, paragraphs_morph):
     file_path = folder_path + os.sep + file_name
     with open(file_path, 'r', encoding='utf-8') as f_semantics:
-        analyses = [line.strip('\n') for line in f_semantics.readlines()]
+        analyses = [line.strip('\n') for line in f_semantics.readlines() if line.strip('\n') != '']
     for analysis in analyses:
-        if analysis != '':
-            items_analysis = analysis.split('\t')
-            wordform = items_analysis[1].split('=')[1]
-            for paragraph in paragraphs_morph:
-                if wordform in paragraph.keys():
-                    try:
-                        # no ParentOffset = -1 characteristic
-                        if (not 'ParentOffset' in analysis) or ('Preposition' in analysis):
-                            lemma = str(items_analysis[2].split('=')[1])
-                            surf_slot = str(items_analysis[5].split('=')[1])
-                            sem_slot = str(items_analysis[6].split('=')[1])
-                        else:
-                            lemma = str(items_analysis[3].split('=')[1])
-                            surf_slot = str(items_analysis[6].split('=')[1])
-                            sem_slot = str(items_analysis[7].split('=')[1])
-                        morpho = str(paragraph[wordform][0])
-                        paragraph[wordform] = [lemma, morpho, sem_slot, surf_slot]
-                    except:
-                        buf = 1
+        items_analysis = analysis.split('\t')
+        wordform = items_analysis[1].split('=')[1]
+        for paragraph in paragraphs_morph:
+            if wordform in paragraph.keys():
+                try:
+                    # no ParentOffset = -1 characteristic
+                    if (not 'ParentOffset' in analysis) or ('Preposition' in analysis):
+                        lemma = str(items_analysis[2].split('=')[1])
+                        surf_slot = str(items_analysis[5].split('=')[1])
+                        sem_slot = str(items_analysis[6].split('=')[1])
+                    else:
+                        lemma = str(items_analysis[3].split('=')[1])
+                        surf_slot = str(items_analysis[6].split('=')[1])
+                        sem_slot = str(items_analysis[7].split('=')[1])
+                    morpho = str(paragraph[wordform][0])
+                    paragraph[wordform] = [lemma, morpho, sem_slot, surf_slot]
+                except:
+                    buf = 1
     return paragraphs_morph
 
 
