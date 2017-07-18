@@ -38,12 +38,12 @@ def head(text_params, file_name, text_count):
     head_lines = ''
     if txt_file_name in text_params.keys():
         head_lines = '<? xml version=\"1.0\" encoding=\"utf-8\" ?>'
-        head_lines = head_lines + '\n' + '<text name=\"%s\" id=\"%d\">' % (txt_file_name.strip('.txt'), text_count)
+        head_lines = head_lines + '\n' + '<text name=\"{0}\" id=\"{1}\">'.format(txt_file_name.strip('.txt'), text_count)
         text_count += 1
         head_lines = head_lines + '\n' + '<tags>'
         if text_params[txt_file_name][1] != '':
-            head_lines = head_lines + '\n' + '<tag>url: %s</tag>' % text_params[txt_file_name][1]
-        head_lines = head_lines + '\n' + '<tag>Тема: %s</tag>' % text_params[txt_file_name][0]
+            head_lines = head_lines + '\n' + '<tag>url: {}</tag>'.format(text_params[txt_file_name][1])
+        head_lines = head_lines + '\n' + '<tag>Тема: {}</tag>'.format(text_params[txt_file_name][0])
         head_lines = head_lines + '\n' + '</tags>\n'
     return head_lines, text_count
 
@@ -115,23 +115,23 @@ def semantics_and_syntax(folder_path, file_name, paragraphs_morph):
 def lemma_and_grammemes(word, grammemes, xml_ar):
     if len(grammemes) > 1:
         # <l>
-        xml_ar.append('<l t=\"%s\" id=\"@@\">' % grammemes[0])
+        xml_ar.append('<l t=\"{}\" id=\"@@\">'.format(grammemes[0]))
         # grammemes
         tags = re.split('[ ,]', grammemes[1])
         for tag in tags:
-            xml_ar.append('<g v=\"%s\" />' % tag)
+            xml_ar.append('<g v=\"{}\" />'.format(tag))
         # semantics (if any)
         # syntax (if any)
         try:
-            xml_ar.append('<sc v=\"%s\" />' % grammemes[2])
-            xml_ar.append('<ss v=\"%s\" />' % grammemes[3])
+            xml_ar.append('<sc v=\"{}\" />'.format(grammemes[2]))
+            xml_ar.append('<ss v=\"{}\" />'.format(grammemes[3]))
         except:
             buf = 1
     # preposition
     else:
-        xml_ar.append('<l t=\"%s\" id=\"@@\">' % word)
+        xml_ar.append('<l t=\"{}\" id=\"@@\">'.format(word))
         try:
-            xml_ar.append('<g v=\"%s\" />' %grammemes[0])
+            xml_ar.append('<g v=\"{}\" />'.format(grammemes[0]))
         except:
             buf = 1
     # </l>
@@ -146,10 +146,10 @@ def do_xml(paragraphs):
     word_count = 1
     xml_ar.append("<paragraphs>")
     for paragraph_count in range(len(paragraphs)):
-        xml_ar.append('<paragraph id=\"%d\">' % (paragraph_count + 1))
+        xml_ar.append('<paragraph id=\"{}\">'.format(paragraph_count + 1))
         # for sentence in paragraphs[paragraph_count]:
         # <sentence>
-        xml_ar.append('<sentence id=\"%d\">' % sentence_count)
+        xml_ar.append('<sentence id=\"{}\">'.format(sentence_count))
         # <source></source>
         source = ' '.join(paragraphs[paragraph_count].keys())
         xml_ar.append('<source>'+ source + '</source>')
@@ -157,10 +157,10 @@ def do_xml(paragraphs):
         xml_ar.append('<tokens>')
         for key in paragraphs[paragraph_count].keys():
             # <token>
-            xml_ar.append('<token text=\"%s\" id=\"%d\">' % (key, word_count))
+            xml_ar.append('<token text=\"{0}\" id=\"{1}\">'.format(key, word_count))
             word_count += 1
             # <tfr>
-            xml_ar.append('<tfr t=\"%s\" rev_id=\"@@@_@@"\>' % key)
+            xml_ar.append('<tfr t=\"{}\" rev_id=\"@@@_@@"\>'.format(key))
             # <v>
             xml_ar.append('<v>')
             # <l></l> + grammemes + syntax, semantics
