@@ -34,9 +34,18 @@ def texts(url):
 
 
 def main():
-    url = 'http://opencorpora.org/books.php?book_id=2&full=1'
-    par = texts(url)
-    print(par)
+    text_ids = []
+    with open('./opencorpora_text_ids.tsv', 'r', encoding='utf-8') as f_ids:
+        for line in f_ids.readlines():
+            items = line.split('\t')
+            text_ids.append(int(items[0]))
+    for text_id in text_ids:
+        url = 'http://opencorpora.org/books.php?book_id={}&full=1'.format(text_id)
+        try:
+            par = texts(url)
+            print(par)
+        except:
+            print('error: {}'.format(text_id))
 
 
 if __name__ == '__main__':
