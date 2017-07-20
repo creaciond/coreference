@@ -3,6 +3,7 @@ from bs4 import SoupStrainer
 import requests
 import re
 import unicodedata
+import os
 
 
 def texts(url):
@@ -26,24 +27,40 @@ def texts(url):
     original_texts = [line for line in lines_into_paragraphs.split('\n') if line != '']
     # get rid of sentence numbers
     for par in original_texts:
+        text = (re.sub('\.?[0-9]+?\.', '', par)).strip(' ')
+        text = re.sub(' +', ' ', text)
         if clean_text != '':
-            clean_text = clean_text + '\n' + (re.sub('\.?[0-9]+?\.', '', par)).strip(' ')
+            clean_text = clean_text + '\n' + text
         else:
-            clean_text = (re.sub('\.?[0-9]+?\.', '', par)).strip(' ')
+            clean_text = text
     return clean_text
+
+
+def save_text(text, text_id):
+    path = '..' + os.sep + '..' + os.sep + 'newcorpus'
+    if not os.path.exists(path):
+        os.makedirs(path)
+    file = path + os.sep + str(text_id) + '.txt'
+    with open(file, 'w', encoding='utf-8') as f_text:
+        f_text.write(text)
 
 
 def main():
     text_ids = []
-    with open('./opencorpora_text_ids.tsv', 'r', encoding='utf-8') as f_ids:
+    with open('.' + os.sep + 'opencorpora_text_ids.csv', 'r', encoding='utf-8') as f_ids:
         for line in f_ids.readlines():
-            items = line.split('\t')
-            text_ids.append(int(items[0]))
+            items = line.split(';')
+            if 'папка' not in line:
+                text_ids.append(int(items[0]))
+    i = 0
     for text_id in text_ids:
         url = 'http://opencorpora.org/books.php?book_id={}&full=1'.format(text_id)
         try:
             par = texts(url)
-            print(par)
+            save_text(par, text_id)
+            i += 1
+            percentage = i/len(text_ids)*100
+            print('{0:.2f}%, text id: {1}'.format(percentage, text_id))
         except:
             print('error: {}'.format(text_id))
 
