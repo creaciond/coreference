@@ -23,7 +23,7 @@ def write_semclass(class_path, sc, sc_id):
 
 
 def main():
-    class_path = '.' + os.sep + 'NLC' + os.sep + 'semclasses.txt'
+    class_path = '..' + os.sep + 'newcorpus' + os.sep + 'NLC' + os.sep + 'semclasses.txt'
     total = len(os.listdir('.' + os.sep + 'NLC'))
     i = 1
     for item in os.listdir('.' + os.sep + 'NLC'):

@@ -37,7 +37,7 @@ def texts(url):
 
 
 def save_text(text, text_id):
-    path = '..' + os.sep + '..' + os.sep + 'newcorpus'
+    path = '.' + os.sep + 'newcorpus' + os.sep + '.txt'
     if not os.path.exists(path):
         os.makedirs(path)
     file = path + os.sep + str(text_id) + '.txt'
