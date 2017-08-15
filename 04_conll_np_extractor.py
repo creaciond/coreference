@@ -15,7 +15,6 @@ def get_sentences(conll_file):
     return clean_sentences
 
 
-
 def assemble_tree(sentence):
     sentence_tags = ''
     punct = set('.,?!-\"')
@@ -39,10 +38,24 @@ def assemble_tree(sentence):
     return sentence_tags
 
 
-def retrieve_NPs(sentence):
-    NPs = []
-    reg_NP = 'NP (?:[A-Z]+=\"([a-z]*)?\" ?)+?\)'
-    print(re.findall(reg_NP, sentence))
+def clean_NPs(NPs_raw, NP_set):
+    reg_word = '\"(.+?)\"'
+    for np in NPs_raw:
+        clean_np = ' '.join(re.findall(reg_word, np))
+        NP_set.add(clean_np)
+    return NP_set
+
+
+def retrieve_NPs(sentence, NPs):
+    reg_NP = 'NP (?:[A-Z]+?=\".*?\" ?)+?\)'
+    NPs_raw = re.findall(reg_NP, sentence)
+    NPs = clean_NPs(NPs_raw, NPs)
+    return NPs
+
+
+def save_NPs(NPs, path):
+    with open(path, 'w', encoding='utf-8') as f:
+        f.write('\n'.join(sorted(NPs)))
 
 
 # i'm really, really sorry
@@ -51,12 +64,14 @@ def main():
     conll_path = '..' + os.sep + 'conll_compreno.txt'
     sentences = get_sentences(conll_path)
     trees = []
+    NPs = set()
     # markup -> trees
     for sentence in sentences:
         trees.append(assemble_tree(sentence))
     for tree in trees:
-        print(tree)
-        retrieve_NPs(tree)
+        NPs = retrieve_NPs(tree, NPs)
+    save_path = conll_path.replace('compreno', 'nps')
+    save_NPs(NPs, save_path)
 
 
 if __name__ == '__main__':
