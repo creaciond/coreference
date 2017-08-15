@@ -93,5 +93,6 @@ ENV/
 
 # Other
 *.csv
+*.txt
 .idea
 /.idea
