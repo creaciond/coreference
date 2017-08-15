@@ -1,4 +1,4 @@
-# from pymorphy2 import MorphAnalyzer
+from pymorphy2 import MorphAnalyzer
 import re
 
 
@@ -37,6 +37,7 @@ def info_to_list(annotations, type):
             annotation_dict['wordform'] = find_feature_value('Text=', annotation_parts)
             annotation_dict['offset'] = find_feature_value('Offset=', annotation_parts)
             annotation_dict['syntax_surface'] = find_feature_value('SurfSlot=', annotation_parts)
+            annotation_dict['synt_paradigm'] = find_feature_value('SP=', annotation_parts)
             annotation_dict['sem_surface'] = find_feature_value('SemSlot=', annotation_parts)
             annotation_dict['sem_deep'] = find_feature_value('SC=', annotation_parts)
         elif type == 'tokens':
@@ -59,9 +60,16 @@ def clean_text(text, token_length):
 def merge_features(current_token, current_nlc):
     current_token['wordform'] = current_nlc['wordform']
     current_token['syntax_surface'] = current_nlc['syntax_surface']
-    current_token['sem_surface'] = current_nlc['sem_deep']
+    current_token['synt_paradigm'] = current_nlc['synt_paradigm']
+    current_token['sem_surface'] = current_nlc['sem_surface']
     current_token['sem_deep'] = current_nlc['sem_deep']
     return current_token
+
+
+def do_morphology(rucor_tokens, morph):
+    for token in rucor_tokens:
+        token['morphology'] = str(morph.parse(token['wordform'])[0].tag)
+    return rucor_tokens
 
 
 def text_and_tokens(text, rucor, nlc):
@@ -69,31 +77,35 @@ def text_and_tokens(text, rucor, nlc):
     rucor_count = 0
     rucor_total = len(rucor)
     nlc_count = 0
-    nlc_total = len(nlc)
     while rucor_count < rucor_total:
         token = rucor[rucor_count]
         if text.startswith(token['wordform']):
             text = clean_text(text, len(token['wordform']))
             if not re.search(reg_punct, token['wordform']):
-                if (nlc[nlc_count]['wordform'].startswith(token['wordform']) or
-                        nlc[nlc_count]['offset'] == token['offset']):
-                    # для слов с дефисами типа "ток-шоу"
+                # если токен NLC начинается с токена RuCor — полное или частичное совпадение по словоформе
+                if nlc[nlc_count]['wordform'].startswith(token['wordform']):
+                    # для слов с дефисами типа "ток-шоу": пропускаем 2 следующих токена
+                    # — это части единого токена в NLC
                     if '-' in nlc[nlc_count]['wordform']:
-                        print(nlc[nlc_count]['wordform'])
+                        token['wordform'] = nlc[nlc_count]['wordform']
                         rucor_count += 2
-                    # для слов, где "не" токенизировалось отдельно, напр., "немедийный"
+                        token = merge_features(token, nlc[nlc_count])
+                    # для слов, где "не" токенизировалось отдельно, напр., "немедийный":
+                    # добавляем информацию из _следующего_ токена в NLC
                     elif (nlc[nlc_count]['wordform'] == 'не' and
                                   nlc[nlc_count + 1]['wordform'] == token['wordform'][2:]):
-                        print(token['wordform'])
                         nlc_count += 1
-                    # для слов, где пробел разорвал токен, напр., "так что"
+                        token = merge_features(token, nlc[nlc_count])
+                    # для слов, где пробел разорвал токен, напр., "так что": пропускаем следующий токен в RuCor
                     elif ' ' in nlc[nlc_count]['wordform']:
-                        print(nlc[nlc_count]['wordform'])
                         rucor_count += 1
-                    token = merge_features(token, nlc[nlc_count])
+                        token = merge_features(token, nlc[nlc_count])
+                    # остальные (i.e. нормальные) случаи
+                    else:
+                        token = merge_features(token, nlc[nlc_count])
                     nlc_count += 1
-        print(token)
         rucor_count += 1
+    return rucor
 
 
 def main():
@@ -103,12 +115,15 @@ def main():
         140773643-#2.csv — нет заголовка, предложения отбиты пустой строкой
         2.txt — нет заголовка, чисто текст, один абзац = одна строка
     """
-    # morph = MorphAnalyzer()
+    morph = MorphAnalyzer()
     rucor = info_to_list(read_info('!new_tokens.txt', header=True), type='tokens')
     nlc = info_to_list(read_info('140773643-#2.csv', header=False), type='NLC')
     with open('2.txt', 'r', encoding='utf-8') as f:
         text = f.read()
-    text_and_tokens(text, rucor, nlc)
+    rucor = text_and_tokens(text, rucor, nlc)
+    rucor = do_morphology(rucor, morph)
+    for i in range(len(rucor)):
+        print('{0}:\n\t\t{1}'.format(i, rucor[i]))
 
 
 if __name__ == '__main__':
