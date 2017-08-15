@@ -39,7 +39,7 @@ def info_to_list(annotations, type):
             annotation_dict['syntax_surface'] = find_feature_value('SurfSlot=', annotation_parts)
             annotation_dict['sem_surface'] = find_feature_value('SemSlot=', annotation_parts)
             annotation_dict['sem_deep'] = find_feature_value('SC=', annotation_parts)
-        else:
+        elif type == 'tokens':
             annotation_dict['wordform'] = annotation_parts[3]
             annotation_dict['offset'] = annotation_parts[1]
             annotation_dict['chain_id'] = annotation_parts[6]
