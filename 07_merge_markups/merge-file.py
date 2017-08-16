@@ -1,3 +1,4 @@
+from datetime import datetime
 from pymorphy2 import MorphAnalyzer
 import os
 import re
@@ -10,33 +11,51 @@ def read_info(file_path, header):
     if header:
         contents.remove(contents[0])
     data = [content.strip('\n') for content in contents if content.strip('\n') != '']
-    # for item in data:
-    #     print(item)
     return data
 
 
-def info_to_dict(annotations, type, doc_id):
-    ready_dict = {}
+def find_feature_value(feature, feature_list):
+    found = False
+    i = 0
+    while not found and i < len(feature_list):
+        if feature in feature_list[i]:
+            found = True
+            value = feature_list[i].split('=')[1]
+        else:
+            i += 1
+    if not found:
+        value = '0'
+    return value
+
+
+def NLC_to_dict(annotations):
+    NLC_dict = {}
     for annotation in annotations:
         annotation_parts = annotation.strip('\n').split('\t')
         annotation_dict = {}
-        if type == 'NLC':
-            offset = find_feature_value('Offset=', annotation_parts)
-            annotation_dict['wordform'] = find_feature_value('Text=', annotation_parts)
-            annotation_dict['syntax_surface'] = find_feature_value('SurfSlot=', annotation_parts)
-            annotation_dict['synt_paradigm'] = find_feature_value('SP=', annotation_parts)
-            annotation_dict['sem_surface'] = find_feature_value('SemSlot=', annotation_parts)
-            annotation_dict['sem_deep'] = find_feature_value('SC=', annotation_parts)
-            ready_dict[offset] = annotation_dict
-        elif type == 'tokens':
-            if annotation_parts[0] == doc_id:
-                offset = annotation_parts[1]
-                annotation_dict['wordform'] = annotation_parts[3]
-                annotation_dict['chain_id'] = annotation_parts[6]
-                annotation_dict['group_id'] = annotation_parts[7]
-                annotation_dict['link_id'] = annotation_parts[8]
-                ready_dict[offset] = annotation_dict
-    return ready_dict
+        offset = find_feature_value('Offset=', annotation_parts)
+        annotation_dict['wordform'] = find_feature_value('Text=', annotation_parts)
+        annotation_dict['syntax_surface'] = find_feature_value('SurfSlot=', annotation_parts)
+        annotation_dict['synt_paradigm'] = find_feature_value('SP=', annotation_parts)
+        annotation_dict['sem_surface'] = find_feature_value('SemSlot=', annotation_parts)
+        annotation_dict['sem_deep'] = find_feature_value('SC=', annotation_parts)
+        NLC_dict[offset] = annotation_dict
+    return NLC_dict
+
+
+def tokens_to_dict(annotations, doc_id):
+    tokens_dict = {}
+    for annotation in annotations:
+        annotation_parts = annotation.strip('\n').split('\t')
+        annotation_dict = {}
+        if annotation.startswith(doc_id):
+            offset = annotation_parts[1]
+            annotation_dict['wordform'] = annotation_parts[3]
+            annotation_dict['chain_id'] = annotation_parts[6]
+            annotation_dict['group_id'] = annotation_parts[7]
+            annotation_dict['link_id'] = annotation_parts[8]
+            tokens_dict[offset] = annotation_dict
+    return tokens_dict
 
 
 def filenames_ids(documents_path):
@@ -52,20 +71,6 @@ def filenames_ids(documents_path):
 
 
 """ Merging markups """
-def find_feature_value(feature, feature_list):
-    found = False
-    i = 0
-    while not found and i < len(feature_list):
-        if feature in feature_list[i]:
-            found = True
-            value = feature_list[i].split('=')[1]
-        else:
-            i += 1
-    if not found:
-        value = ''
-    return value
-
-
 def merge_features(current_token, current_nlc):
     current_token['wordform'] = current_nlc['wordform']
     current_token['syntax_surface'] = current_nlc['syntax_surface']
@@ -95,7 +100,18 @@ def do_morphology(rucor, morph):
 
 
 """ Save as dataset """
-# def save_dataset(rucor):
+def save_dataset(rucor):
+    path = '..' + os.sep + '08_classifier' + os.sep + 'rucor_data.csv'
+    with open(path, 'a', encoding='utf-8') as dataset_file:
+        for offset in rucor:
+            if (rucor[offset]['morphology'] != 'PNCT') and ('sem_deep' in rucor[offset]):
+                data = [rucor[offset]['sem_deep'], rucor[offset]['sem_surface'], rucor[offset]['syntax_surface'],
+                        rucor[offset]['synt_paradigm'], rucor[offset]['morphology']]
+                if rucor[offset]['group_id'] != '-':
+                    data.append('1')
+                else:
+                    data.append('0')
+                dataset_file.write(';'.join(data) + '\n')
 
 
 def main():
@@ -107,11 +123,11 @@ def main():
     documents_path = tokens_path.replace('!new_tokens', 'Documents')
     nlc_folder = '..' + os.sep + '..' + os.sep + 'RuCor' + os.sep + '!all-in-one'
     """ Some general data """
-    all_tokens = read_info('!new_tokens.txt', header=True)
+    all_tokens = read_info(tokens_path, header=True)
     files_and_ids = filenames_ids(documents_path)
     filenames = set(files_and_ids.keys())
     """ Percentage """
-    counter = 0
+    counter = 1
     total = len(os.listdir(nlc_folder))
     """ Mapping: csv's — doc_id — tokens — NLC annotations """
     for item in os.listdir(nlc_folder):
@@ -120,13 +136,19 @@ def main():
             if original_name in filenames:
                 # NLC
                 nlc_path = nlc_folder + os.sep + item
-                nlc = info_to_dict(read_info(nlc_path, header=False), type='NLC', doc_id='')
+                nlc = NLC_to_dict(read_info(nlc_path, header=False))
                 # RuCor
-                rucor = info_to_dict(all_tokens, type='tokens', doc_id=files_and_ids[original_name])
+                original_id = files_and_ids[original_name]
+                rucor = tokens_to_dict(all_tokens, doc_id=original_id)
                 # merging
-                rucor = do_morphology(text_and_tokens(rucor, nlc), morph)
-                # debug print
-                print('{0}/{1}, file: {2}, done: {3:.2f}%'. format(counter, total, nlc_path, counter/total*100))
+                rucor = text_and_tokens(rucor, nlc)
+                rucor = do_morphology(rucor, morph)
+                # save
+                save_dataset(rucor)
+                # kinda logging print
+                now = datetime.now()
+                print('{0:2d}:{1:2d}:{2:2d}\t{3}/{4}, file: {5}, done: {6:.2f}%'. format(now.hour, now.minute, now.second,
+                    counter, total, nlc_path, counter/total*100))
                 counter += 1
 
 
