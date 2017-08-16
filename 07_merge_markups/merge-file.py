@@ -99,14 +99,27 @@ def do_morphology(rucor, morph):
     return rucor
 
 
+def get_ids(annot_string, regex):
+    id = '0'
+    try:
+        id = re.search(string=annot_string, pattern=regex).group(1)
+    except:
+        pass
+    return id
+
+
 """ Save as dataset """
 def save_dataset(rucor):
+    reg_id = re.compile('\(([0-9]+)\)')
     path = '..' + os.sep + '08_classifier' + os.sep + 'rucor_data.csv'
     with open(path, 'a', encoding='utf-8') as dataset_file:
         for offset in rucor:
             if (rucor[offset]['morphology'] != 'PNCT') and ('sem_deep' in rucor[offset]):
-                data = [rucor[offset]['sem_deep'], rucor[offset]['sem_surface'], rucor[offset]['syntax_surface'],
-                        rucor[offset]['synt_paradigm'], rucor[offset]['morphology']]
+                sem_deep = get_ids(rucor[offset]['sem_deep'], reg_id)
+                sem_surface = get_ids(rucor[offset]['sem_surface'], reg_id)
+                syntax_surface = get_ids(rucor[offset]['syntax_surface'], reg_id)
+                synt_paradigm = get_ids(rucor[offset]['synt_paradigm'], reg_id)
+                data = [sem_deep, sem_surface, syntax_surface, synt_paradigm, rucor[offset]['morphology']]
                 if rucor[offset]['group_id'] != '-':
                     data.append('1')
                 else:
