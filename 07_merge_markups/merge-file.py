@@ -4,6 +4,8 @@ import os
 import re
 
 """ Opening and reading files """
+
+
 def read_info(file_path, header):
     data = []
     with open(file_path, 'r', encoding='utf-8') as f:
@@ -35,10 +37,10 @@ def NLC_to_dict(annotations):
         annotation_dict = {}
         offset = find_feature_value('Offset=', annotation_parts)
         annotation_dict['wordform'] = find_feature_value('Text=', annotation_parts)
-        annotation_dict['syntax_surface'] = find_feature_value('SurfSlot=', annotation_parts)
-        annotation_dict['synt_paradigm'] = find_feature_value('SP=', annotation_parts)
-        annotation_dict['sem_surface'] = find_feature_value('SemSlot=', annotation_parts)
-        annotation_dict['sem_deep'] = find_feature_value('SC=', annotation_parts)
+        annotation_dict['semantic_class'] = find_feature_value('SC=', annotation_parts)
+        annotation_dict['semantic_slot'] = find_feature_value('SemSlot=', annotation_parts)
+        annotation_dict['surface_slot'] = find_feature_value('SurfSlot=', annotation_parts)
+        annotation_dict['syntax_paradigm'] = find_feature_value('SP=', annotation_parts)
         NLC_dict[offset] = annotation_dict
     return NLC_dict
 
@@ -71,12 +73,14 @@ def filenames_ids(documents_path):
 
 
 """ Merging markups """
+
+
 def merge_features(current_token, current_nlc):
     current_token['wordform'] = current_nlc['wordform']
-    current_token['syntax_surface'] = current_nlc['syntax_surface']
-    current_token['synt_paradigm'] = current_nlc['synt_paradigm']
-    current_token['sem_surface'] = current_nlc['sem_surface']
-    current_token['sem_deep'] = current_nlc['sem_deep']
+    current_token['semantic_class'] = current_nlc['semantic_class']
+    current_token['semantic_slot'] = current_nlc['semantic_slot']
+    current_token['surface_slot'] = current_nlc['surface_slot']
+    current_token['syntax_paradigm'] = current_nlc['syntax_paradigm']
     return current_token
 
 
@@ -92,6 +96,8 @@ def text_and_tokens(rucor, nlc):
 
 
 """ Morphology """
+
+
 def do_morphology(rucor, morph):
     for token_offset in rucor:
         word = rucor[token_offset]['wordform']
@@ -109,22 +115,34 @@ def get_ids(annot_string, regex):
 
 
 """ Save as dataset """
-def save_dataset(rucor):
+def line_to_write(offset, rucor, reg_id):
+    data = []
+    if (rucor[offset]['morphology'] != 'PNCT') and ('semantic_class' in rucor[offset]):
+        semantic_class = get_ids(rucor[offset]['semantic_class'], reg_id)
+        semantic_slot = get_ids(rucor[offset]['semantic_slot'], reg_id)
+        surface_slot = get_ids(rucor[offset]['surface_slot'], reg_id)
+        syntax_paradigm = get_ids(rucor[offset]['syntax_paradigm'], reg_id)
+        data = [semantic_class, semantic_slot, surface_slot, syntax_paradigm, rucor[offset]['morphology']]
+        data.append(rucor[offset]['group_id'])
+        data.append(rucor[offset]['chain_id'])
+        data.append(rucor[offset]['link_id'])
+    return ';'.join(data) + '\n'
+
+
+def save_dataset(rucor, original_id):
+    folder_path = '..' + os.sep + '08_classifier' + os.sep + 'data_raw'
+    if not os.path.exists(folder_path):
+        os.makedirs(folder_path)
+    file_path = folder_path + os.sep + original_id + '.csv'
     reg_id = re.compile('\(([0-9]+)\)')
-    path = '..' + os.sep + '08_classifier' + os.sep + 'rucor_data.csv'
-    with open(path, 'a', encoding='utf-8') as dataset_file:
+    with open(file_path, 'w', encoding='utf-8') as dataset_file:
+        dataset_file.write('semantic_class;semantic_slot;surface_slot;syntax_paradigm;morphology;' +
+                           'group_id;chain_id;link_id\n')
+    with open(file_path, 'a', encoding='utf-8') as dataset_file:
         for offset in rucor:
-            if (rucor[offset]['morphology'] != 'PNCT') and ('sem_deep' in rucor[offset]):
-                sem_deep = get_ids(rucor[offset]['sem_deep'], reg_id)
-                sem_surface = get_ids(rucor[offset]['sem_surface'], reg_id)
-                syntax_surface = get_ids(rucor[offset]['syntax_surface'], reg_id)
-                synt_paradigm = get_ids(rucor[offset]['synt_paradigm'], reg_id)
-                data = [sem_deep, sem_surface, syntax_surface, synt_paradigm, rucor[offset]['morphology']]
-                if rucor[offset]['group_id'] != '-':
-                    data.append('1')
-                else:
-                    data.append('0')
-                dataset_file.write(';'.join(data) + '\n')
+            line = line_to_write(offset, rucor, reg_id)
+            if line != '\n':
+                dataset_file.write(line)
 
 
 def main():
@@ -157,11 +175,11 @@ def main():
                 rucor = text_and_tokens(rucor, nlc)
                 rucor = do_morphology(rucor, morph)
                 # save
-                save_dataset(rucor)
+                save_dataset(rucor, original_id)
                 # kinda logging print
                 now = datetime.now()
-                print('{0:2d}:{1:2d}:{2:2d}\t{3}/{4}, file: {5}, done: {6:.2f}%'. format(now.hour, now.minute, now.second,
-                    counter, total, nlc_path, counter/total*100))
+                print('{0:2d}:{1:2d}:{2:2d}\t{3:3d}/{4:3d}\tfile: {5}\t\t\tdone: {6:.2f}%'.format(now.hour, now.minute,
+                    now.second, counter, total, nlc_path, counter / total * 100))
                 counter += 1
 
 
