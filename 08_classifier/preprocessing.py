@@ -99,7 +99,7 @@ def extract_mention_candidates(tokens, noun_paradigm, candidates_features, candi
         token_parts = token.split(';')
         paradigm = token_parts[3]
         if paradigm == noun_paradigm:
-            candidates_features.append(';'.join(token_parts[:-3]))
+            candidates_features.append(';'.join(token_parts[:-4]))
             group = token_parts[-3]
             if group != '-':
                 candidates_results.append('1')
@@ -109,19 +109,44 @@ def extract_mention_candidates(tokens, noun_paradigm, candidates_features, candi
     return candidates_features, candidates_results
 
 
-def save_as_dataset(information, path, selection, values):
-    path = path + '_' + values + '_' + selection + '.csv'
+def save_into_file(information, path, selection, values):
+    path = path + '_' + selection + '_' + values + '.txt'
     new_information = []
     for piece in information:
-        if (type(piece) != int) and (values != 'results'):
-            line = ', '.join(piece)
+        if values != 'results':
+            if type(piece) == list:
+                line = ', '.join(piece)
+            else:
+                line = piece
             line = line.replace(']', '')
             line = line.replace('[', '')
+            line = line.replace(';', ', ')
             new_information.append(line)
         elif values == 'results':
             new_information.append(str(piece))
     with open(path, 'w', encoding='utf-8') as f:
         f.write('\n'.join(new_information))
+
+
+def split_data(features, results):
+    features_train, features_test, res_train, res_test = train_test_split(features,
+        results, test_size=0.33)
+    print('TRAIN: {0} features, {1} results'.format(len(features_train), len(res_train)))
+    print('TEST: {0} features, {1} results'.format(len(features_test), len(res_test)))
+    return features_train, features_test, res_train, res_test
+
+
+def save_data(ready_path, features, results, filename):
+    if not os.path.exists(ready_path):
+        os.makedirs(ready_path)
+    train, test, res_train, res_test = train_test_split(features, results, test_size=0.33)
+    print('Train: {0} features, {1} results'.format(len(train), len(res_train)))
+    print('Test: {0} features, {1} results'.format(len(test), len(res_test)))
+    common_part = ready_path + os.sep + filename[:-4]
+    save_into_file(train, common_part, selection='train', values='features')
+    save_into_file(test, common_part, selection='test', values='features')
+    save_into_file(res_train, common_part, selection='train', values='results')
+    save_into_file(res_test, common_part, selection='test', values='results')
 
 
 def main():
@@ -134,34 +159,26 @@ def main():
     folder = '.' + os.sep + 'data_raw'
     for item in os.listdir(folder):
         if item.endswith('.csv'):
-            # чтение из файла
             text_tokens = folder + os.sep + item
-            print('working with file: {}'.format(text_tokens))
+            print('Working with file: {}'.format(text_tokens))
+            # чтение из файла
             with open(text_tokens, 'r', encoding='utf-8') as f:
                 tokens = [line.strip('\n') for line in f.readlines()[1:]]
-            print('overall, {} tokens'.format(len(tokens)))
+            print('Overall: {} tokens'.format(len(tokens)))
             tokens = [modify_token(token, embeddings_dict=emb_dict, synt_paradigms_bin=bin_par) for token in tokens]
-            # создаём внутри документа пары токенов
+            # пары токенов: кореферентны или нет
             pair_features, pair_results = create_pairs(tokens)
-            # для отбора токенов на кандидаты в меншены
+            ready_path_pairs = folder.replace('raw', 'ready') + os.sep + 'pairs'
+            print('=== PAIRS ===')
+            save_data(ready_path_pairs, pair_features, pair_results, filename=item)
+            # является ли токен меншеном
             synt_noun_id = '7'
             synt_noun_bin = str(bin_par[synt_noun_id])
             mention_candidates, mention_candidates_results = extract_mention_candidates(tokens, synt_noun_bin,
                 mention_candidates, mention_candidates_results)
-            #
-            # сохранение
-            ready_path = folder.replace('raw', 'ready')
-            if not os.path.exists(ready_path):
-                os.makedirs(ready_path)
-            pairs_train, pairs_test, pairs_res_train, pairs_res_test = train_test_split(pair_features,
-                pair_results, test_size=0.33)
-            print('TRAIN: {0} features, {1} results'.format(len(pairs_train), len(pairs_res_train)))
-            print('TEST: {0} features, {1} results'.format(len(pairs_test), len(pairs_res_test)))
-            common_part = ready_path + os.sep + item[:-4]
-            save_as_dataset(pairs_train, common_part, selection='train', values='features')
-            save_as_dataset(pairs_test, common_part, selection='test', values='features')
-            save_as_dataset(pairs_res_train, common_part, selection='train', values='results')
-            save_as_dataset(pairs_res_test, common_part, selection='test', values='results')
+            ready_path_mentions = ready_path_pairs.replace('pairs', 'mentions')
+            print('=== MENTIONS ===')
+            save_data(ready_path_mentions, mention_candidates, mention_candidates_results, filename=item)
         break
 
 
