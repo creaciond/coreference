@@ -64,12 +64,13 @@ def build_tree(nodelist):
 def subtree(tree, NP_parts):
     this_id = tree['id']
     NP_parts.append(this_id)
-    for dependent in tree['children']:
-        if 'children' in dependent.keys():
-            subtree(dependent, NP_parts)
-        else:
-            new_id = dependent['id']
-            NP_parts.append(new_id)
+    if 'children' in tree.keys():
+        for dependent in tree['children']:
+            if 'children' in dependent.keys():
+                subtree(dependent, NP_parts)
+            else:
+                new_id = dependent['id']
+                NP_parts.append(new_id)
     return NP_parts
 
 
@@ -78,7 +79,7 @@ def assemble_word(ids, words_dict):
     return ' '.join(words)
 
 
-def extract_NPs(tree, words_dict):
+def extract_NPs(tree, words_dict, all_NPs):
     counter = 1
     for subtree_first in tree['children']:
         word_id = subtree_first['id']
@@ -86,8 +87,9 @@ def extract_NPs(tree, words_dict):
             NP_parts = []
             NP_parts = subtree(subtree_first, NP_parts)
             NP = assemble_word(sorted(NP_parts), words_dict)
-            print('{0}) {1}'.format(counter, NP))
+            all_NPs.append(NP)
             counter += 1
+    return all_NPs
 
 
 def main():
@@ -98,11 +100,13 @@ def main():
             sentences = f.read().split('\n\n')
         for sentence in sentences:
             dict_sentence, ids = sentence_to_dict(sentence)
-            tree = build_tree(ids)
-            extract_NPs(tree, dict_sentence)
-            break
-        break
-
+            try:
+                tree = build_tree(ids)
+                all_NPs = extract_NPs(tree, dict_sentence, all_NPs)
+            except:
+                pass
+    with open('.' + os.sep + 'NPs.txt', 'w', encoding='utf-8') as f:
+        f.write('\n'.join(all_NPs))
 
 
 if __name__ == '__main__':
