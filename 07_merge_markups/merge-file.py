@@ -2,11 +2,17 @@ from datetime import datetime
 from pymorphy2 import MorphAnalyzer
 import os
 import re
-
-""" Opening and reading files """
-
-
 def read_info(file_path, header):
+    """
+    Reads information from file.
+
+    Args:
+        file_path (str) — path to file to be read
+        header (bool) — whether there is any header in the file
+
+    Returns:
+        data (list of strs) — list of lines with information (all empty lines omitted)
+    """
     data = []
     with open(file_path, 'r', encoding='utf-8') as f:
         contents = f.readlines()
@@ -17,6 +23,16 @@ def read_info(file_path, header):
 
 
 def find_feature_value(feature, feature_list):
+    """
+    Finds a value of a given feature.
+
+    Args:
+        feature (str) — feature we're interested in
+        feature_list (list of strs) — list of strs which may contain the feature
+
+    Returns:
+         value (str) — value of the feature (if feature is present) or '0'
+    """
     found = False
     i = 0
     while not found and i < len(feature_list):
@@ -31,6 +47,18 @@ def find_feature_value(feature, feature_list):
 
 
 def NLC_to_dict(annotations):
+    """
+    Given a list of token annotations from ABBYY Compreno, transform it into dictionary.
+
+    Args:
+        annotations (list of strs) — list with annotations: each list item is
+            a separate annotation
+
+    Returns:
+         NLC_dict (dict) — dict of annotations, keys are token offsets:
+            {offset (str): annotations (dict)}
+            annotations: {feature (str): value (str)}
+    """
     NLC_dict = {}
     for annotation in annotations:
         annotation_parts = annotation.strip('\n').split('\t')
@@ -46,6 +74,18 @@ def NLC_to_dict(annotations):
 
 
 def tokens_to_dict(annotations, doc_id):
+    """
+    Given a list of annotations from RuCor (token-wise), convert it to dictionary.
+
+    Args:
+        annotations (list of strs) — list with annotations: each list item is
+            a separate annotation
+        doc_id (str) — id of a given documents
+    Returns:
+        tokens_dict (dict) — dict of annotations, keys are token offsets:
+            {offset (str): annotation_dict (dict)}
+            annotation_dict: {feature (str): value (str)}
+    """
     tokens_dict = {}
     for annotation in annotations:
         annotation_parts = annotation.strip('\n').split('\t')
@@ -61,6 +101,15 @@ def tokens_to_dict(annotations, doc_id):
 
 
 def filenames_ids(documents_path):
+    """
+    Given a file with mapping of documents and their IDs, returns a dict with the mapping.
+
+    Args:
+        documents_path (str) — path to the file with informations
+    Returns:
+        names_doc_ids (dict) — dictionary with mapping of files and doc_ids:
+            {filename (str): doc_id (str)}
+    """
     info = read_info(documents_path, header=True)
     names_doc_ids = {}
     reg_name = re.compile('\/(.*?)\.txt')
@@ -72,10 +121,16 @@ def filenames_ids(documents_path):
     return names_doc_ids
 
 
-""" Merging markups """
-
-
 def merge_features(current_token, current_nlc):
+    """
+    Add information from NLC dictionary to annotation from RuCor dictionary.
+
+    Args:
+        current_token (dict) — annotation of a specific token from RuCor
+        current_nlc (dict) — annotation of a specific token from NLC_dict
+    Returns:
+        current_token (dict) — updated RuCor annotation
+    """
     current_token['wordform'] = current_nlc['wordform']
     current_token['semantic_class'] = current_nlc['semantic_class']
     current_token['semantic_slot'] = current_nlc['semantic_slot']
@@ -85,6 +140,16 @@ def merge_features(current_token, current_nlc):
 
 
 def text_and_tokens(rucor, nlc):
+    """
+    Updates annotation from RuCor with information extraced from NLC_dict.
+
+    Args:
+        rucor (dict) — all annotations from RuCor
+        nlc (dict) — all annotations from NLC / ABBYY Compreno
+    Returns:
+         rucor (dict) — updated annontations with merged information
+            from both dictionaries in args
+    """
     nlc_offsets = set(nlc.keys())
     for item_offset in rucor:
         try:
@@ -95,17 +160,33 @@ def text_and_tokens(rucor, nlc):
     return rucor
 
 
-""" Morphology """
-
-
 def do_morphology(rucor, morph):
+    """
+    Adds morphological information for the token.
+    Args:
+        rucor (dict) — dictionary with token information
+        morph (pymorphy2.MorphAnalyzer()) — morphological analyzer, used for morphological
+            parsing of the token itself
+    Returns:
+        rucor (dict) — updated dictionary with morphological information
+    """
+
     for token_offset in rucor:
         word = rucor[token_offset]['wordform']
         rucor[token_offset]['morphology'] = str(morph.parse(word)[0].tag)
     return rucor
 
 
-def get_ids(annot_string, regex):
+def get_id(annot_string, regex):
+    """
+    Gives an ID of a particular value.
+
+    Args:
+        annot_string (str) — a string with a particular feature value and its ID in it
+        regex (regular expression) — a regex for searching the ID
+    Returns:
+        id (str) — value ID
+    """
     id = '0'
     try:
         id = re.search(string=annot_string, pattern=regex).group(1)
@@ -114,53 +195,69 @@ def get_ids(annot_string, regex):
     return id
 
 
-""" Save as dataset """
-def line_to_write(offset, rucor, reg_id):
+def line_to_write(annotation, reg_id):
+    """
+    Assembles a line to write in the dataset from a particular annotation.
+
+    Args:
+        annotation (dict) — annotation of a particular token
+        reg_id (regular expression) — regex for searching value ID
+    Returns:
+        line (str) — line with token annotation
+    """
     data = []
-    if (rucor[offset]['morphology'] != 'PNCT') and ('semantic_class' in rucor[offset]):
-        semantic_class = get_ids(rucor[offset]['semantic_class'], reg_id)
-        semantic_slot = get_ids(rucor[offset]['semantic_slot'], reg_id)
-        surface_slot = get_ids(rucor[offset]['surface_slot'], reg_id)
-        syntax_paradigm = get_ids(rucor[offset]['syntax_paradigm'], reg_id)
-        data = [semantic_class, semantic_slot, surface_slot, syntax_paradigm, rucor[offset]['morphology']]
-        data.append(rucor[offset]['group_id'])
-        data.append(rucor[offset]['chain_id'])
-        data.append(rucor[offset]['link_id'])
-    return ';'.join(data) + '\n'
+
+    if (annotation['morphology'] != 'PNCT') and ('semantic_class' in annotation):
+        sem_class_id = get_id(annotation['semantic_class'], reg_id)
+        sem_slot_id = get_id(annotation['semantic_slot'], reg_id)
+        surf_slot_id = get_id(annotation['surface_slot'], reg_id)
+        synt_par_id = get_id(annotation['syntax_paradigm'], reg_id)
+        data = [sem_class_id, sem_slot_id, surf_slot_id, synt_par_id, annotation['morphology'],
+                annotation['group_id'], annotation['chain_id'], annotation['link_id']]
+
+    line = ','.join(data) + '\n'
+    return line
 
 
 def save_dataset(rucor, original_id):
+    """
+    Saves annotation as a dataset.
+
+    Args:
+        rucor (dict) — dictionary with annotations
+        original_id (str) — ID of the original text
+    Returns:
+        none
+    """
+
     folder_path = '..' + os.sep + '08_classifier' + os.sep + 'data_raw'
     if not os.path.exists(folder_path):
         os.makedirs(folder_path)
     file_path = folder_path + os.sep + original_id + '.csv'
+
     reg_id = re.compile('\(([0-9]+)\)')
     with open(file_path, 'w', encoding='utf-8') as dataset_file:
-        dataset_file.write('semantic_class;semantic_slot;surface_slot;syntax_paradigm;morphology;' +
-                           'group_id;chain_id;link_id\n')
-    with open(file_path, 'a', encoding='utf-8') as dataset_file:
         for offset in rucor:
-            line = line_to_write(offset, rucor, reg_id)
+            line = line_to_write(rucor[offset], reg_id)
             if line != '\n':
                 dataset_file.write(line)
 
 
 def main():
-    """ Variables """
     morph = MorphAnalyzer()
     reg_new_name = re.compile('[0-9]{,9}-#')
-    """ Various paths """
+
     tokens_path = '..' + os.sep + '..' + os.sep + 'RuCor' + os.sep + '!new_tokens.txt'
     documents_path = tokens_path.replace('!new_tokens', 'Documents')
     nlc_folder = '..' + os.sep + '..' + os.sep + 'RuCor' + os.sep + '!all-in-one'
-    """ Some general data """
+
     all_tokens = read_info(tokens_path, header=True)
     files_and_ids = filenames_ids(documents_path)
     filenames = set(files_and_ids.keys())
-    """ Percentage """
+
     counter = 1
     total = len(os.listdir(nlc_folder))
-    """ Mapping: csv's — doc_id — tokens — NLC annotations """
+
     for item in os.listdir(nlc_folder):
         if item.endswith('.csv'):
             original_name = reg_new_name.sub('', item).strip('.csv')
