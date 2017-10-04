@@ -95,4 +95,4 @@ ENV/
 *.csv
 *.txt
 .idea/
-!data/
+\!data/
