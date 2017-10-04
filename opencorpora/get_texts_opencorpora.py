@@ -37,7 +37,7 @@ def texts(url):
 
 
 def save_text(text, text_id):
-    path = '.' + os.sep + 'newcorpus' + os.sep + '.txt'
+    path = '..' + os.sep + '!data' + os.sep + 'newcorpus' + os.sep + 'orginal' + os.sep + '.txt'
     if not os.path.exists(path):
         os.makedirs(path)
     file = path + os.sep + str(text_id) + '.txt'
@@ -47,7 +47,7 @@ def save_text(text, text_id):
 
 def main():
     text_ids = []
-    with open('.' + os.sep + 'opencorpora_text_ids.csv', 'r', encoding='utf-8') as f_ids:
+    with open('..' + os.sep + '!data' + os.sep + 'opencorpora_text_ids.csv', 'r', encoding='utf-8') as f_ids:
         for line in f_ids.readlines():
             items = line.split(';')
             if 'папка' not in line:
