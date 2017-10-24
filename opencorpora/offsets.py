@@ -1,6 +1,7 @@
 import os
 import re
 import string
+import time
 
 
 def rename_nlc(path):
@@ -12,9 +13,10 @@ def rename_nlc(path):
     Returns:
         none
     """
-    reg_file_name = re.compile("[0-9]+?-#([0-9]+?\.csv)")
+    reg_file_name = re.compile("[0-9]+?-#(book_[0-9]+?\.csv)")
     for file in os.listdir(path):
         if file.endswith('.csv') and re.search(reg_file_name, file):
+            print(file)
             filepath = path + os.sep + file
             norm_name = path + os.sep + re.search(reg_file_name, file).group(1)
             os.rename(filepath, norm_name)
@@ -45,7 +47,7 @@ def offsets_opencorpora(file):
     return tokens, offsets
 
 
-def offsets_parsed(file):
+def offsets_NLC(file):
     """
         Reads from a file with NLC tokenization and annotation.
 
@@ -70,82 +72,83 @@ def offsets_parsed(file):
     return tokens, offsets
 
 
-def try_merge_tokens(tokens_orig, offsets_orig, tokens_nlc, offsets_nlc):
-    i = 0
-    j = 0
-    offsets_map = []
-    while i <= min(len(offsets_orig, offsets_nlc)):
-        if offsets_orig[i] == offsets_nlc[j]:
-            if len(tokens_orig[i]) == len(tokens_nlc[j]):
-                offsets_map.append((offsets_orig[i], offsets_orig[i]))
-                i += 1
-                j += 1
-            if tokens_orig[i] in string.punctuation:
-                offsets_map.append((offsets_orig[i], -1))
-                i += 1
-            if len(tokens_orig[i]) < len(tokens_nlc[j]):
-                if tokens_orig[i] + tokens_orig[i+1] == tokens_nlc[j]:
-                    offsets_map.append((offsets_orig[i], offsets_nlc[j]))
-                    offsets_map.append((offsets_orig[i+1], offsets_nlc[j]))
-                    i += 2
-                    j += 1
-            if len(tokens_orig[i]) > len(tokens_nlc[j]):
-                if tokens_nlc[j] + tokens_nlc[j+1] == tokens_orig[i]:
-                    nlc_list = [offsets_nlc[j], offsets_nlc[j+1]]
-                    offsets_map.append((offsets_orig[i], nlc_list))
-                    i += 1
-                    j += 2
+def merge(NLC_tokens, NLC_offsets, OC_tokens, OC_offsets):
+    """
+    Merges two markups, of OpenCorpora and of ABBYY NLC, so that NLC tokens are aligned to OpenCorpora's (OC).
+
+    Args:
+        NLC_tokens (list): list of NLC tokens in the given text
+        NLC_offsets (list): list of starting offsets for the correpsonding tokens
+        OC_tokens (list): list of OC tokens extracted from the given text
+        OC_offsets (list): list of starting offsets for the correpsonding tokens
+    Returns:
+        alignment (list of tuples): list where each tuple stands for token alignment, formatted as follows:
+            (token in OC (str), offset in OC (int), token in NLC (str), offset in NLC (int))
+
+    TODO:
+    починить костыль с str() для случаев, когда 1 токену OC соответствует два в NLC
+    """
+    alignment = []
+    for OC_offset in OC_offsets:
+        ind_OC = OC_offsets.index(OC_offset)
+        if (OC_offset in NLC_offsets) and (OC_tokens[ind_OC] not in string.punctuation):
+            ind_NLC = NLC_offsets.index(OC_offset)
+            NLC_tok = NLC_tokens[ind_NLC]
+            NLC_off = NLC_offsets[ind_NLC]
+            if (ind_NLC <= len(NLC_tokens)-2) and (ind_OC <= len(OC_tokens)-2):
+                if NLC_offsets[ind_NLC + 1] < OC_offsets[ind_OC + 1]:
+                    tok = [NLC_tokens[ind_NLC], NLC_tokens[ind_NLC+1]]
+                    off = [str(NLC_offsets[ind_NLC]), str(NLC_offsets[ind_NLC+1])]
+                    NLC_tok = ", ".join(tok)
+                    NLC_off = ", ".join(off)
+            tup = (OC_tokens[ind_OC], OC_offsets[ind_OC], NLC_tok, NLC_off)
+            alignment.append(tup)
+    # alignment = alignment.sort(key=lambda line: line[1])
+    return alignment
 
 
-def difference(first, second):
-    return [item for item in first if item not in second]
-
-
-def easy_merge(tokens_orig, offsets_orig, tokens_nlc, offsets_nlc):
-    mapping = []
-    # i = 0
-    # j = 0
-    # while (i <= len(tokens_orig)):
-    #     if tokens_orig[i] == tokens_nlc[j]:
-    #         mapping.append((tokens_orig[i], offsets_orig[i], tokens_nlc[j], offsets_nlc[j]))
-    #         j += 1
-    #     else:
-    #         in1 = " ".join([tokens_orig[i], tokens_orig[i+1], tokens_orig[i+2]])
-    #         if in1 == tokens_nlc[j]:
-    #             mapping.append((tokens_orig[i], offsets_orig[i], tokens_nlc[j], offsets_nlc[j]))
-    #             i += 2
-    #             j += 1
-    #         else:
-    #             print(tokens_orig[i], "vs", tokens_nlc[j])
-    #     i += 1
-    for token in tokens_orig:
-        if token in tokens_nlc:
-            info = (token, offsets_orig[tokens_orig.index(token)], token, offsets_nlc[tokens_nlc.index(token)])
-            print(info)
-            mapping.append(info)
-    return mapping
-
+def save_merged(alignment, path):
+    """
+    Saves the alignment
+    Args:
+        alignment (list of tuples): list where each tuple stands for token alignment, formatted as follows:
+            (token in OC (str), offset in OC (int), token in NLC (str), offset in NLC (int))
+        path (str): path to save at
+    Returns:
+        none
+    """
+    with open(path, "w", encoding="utf-8") as save_map:
+        for piece in alignment:
+            save_map.write("{}\t{}\t{}\n".format(piece[0], piece[1], piece[3]))
 
 
 def main():
-    newcorpus_path = ".." + os.sep + "!data" + os.sep + "newcorpus"
-    path_original = newcorpus_path + os.sep + "oldtokens"
-    path_parsed = newcorpus_path + os.sep + "nospaces_nlc"
-    path_opencorpora = newcorpus_path + os.sep + "newtokens"
-
-    for item in os.listdir(path_original):
-        doc_id = item[:-4]
-        print(doc_id)
-        doc_parsed = path_parsed + os.sep + doc_id + ".csv"
-        doc_opencorpora = path_opencorpora + os.sep + "book_" + doc_id + ".tokens"
-
-        opencorpora_tokens, opencorpora_offsets = offsets_opencorpora(doc_opencorpora)
-        nlc_tokens, nlc_offsets = offsets_parsed(doc_parsed)
-        print("OpenCorpora: {} tokens, NLC: {} tokens".format(len(opencorpora_tokens), len(nlc_tokens)))
-
-        map = easy_merge(opencorpora_tokens, opencorpora_offsets, nlc_tokens, nlc_offsets)
-
-        break
+    path_NLC = ".." + os.sep + "!data" + os.sep + "newcorpus" + os.sep + "nospaces_NLC"
+    path_OC = ".." + os.sep + "!data" + os.sep + "newcorpus" + os.sep + "newtokens_OC"
+    path_align = ".." + os.sep + "!data" + os.sep + "newcorpus" + os.sep + "align"
+    if not os.path.exists(path_align):
+        os.makedirs(path_align)
+    # uncomment following if it's the first code run; otherwise does nothing
+    # rename_nlc(path_NLC)
+    NLC_files = [file for file in os.listdir(path_NLC) if file.endswith(".csv")]
+    counter = 1
+    total = len(NLC_files)
+    begin = time.time()
+    for NLC_file in NLC_files:
+        # tokens from both files
+        NLC_tokens, NLC_offsets = offsets_NLC(path_NLC + os.sep + NLC_file)
+        OC_path = path_OC + os.sep + re.sub("csv", "tokens", NLC_file)
+        OC_tokens, OC_offsets = offsets_opencorpora(OC_path)
+        # merge and save
+        align = merge(NLC_tokens, NLC_offsets, OC_tokens, OC_offsets)
+        file_align = path_align + os.sep + re.sub("csv", "txt", NLC_file)
+        save_merged(align, file_align)
+        # logging print
+        print("{}/{} files, name: {}, ready: {:.2f}%".format(counter, total, NLC_file, counter/total*100))
+        counter += 1
+    end = time.time()
+    print("Started at {}, ended at {}, time consumed: {}".format(time.ctime(begin),
+        time.ctime(end), end-begin))
 
 
 if __name__ == "__main__":
