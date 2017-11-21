@@ -24,9 +24,11 @@ def parse_rdf(rdf_path):
                     mention_start = child.text
                 if "annotation_end" in child.tag:
                     mention_end = child.text
-            if mention_id not in mentions:
-                mentions[mention_start] = []
-            mentions[mention_start].append((mention_id, mention_end))
+                if "instance" in child.tag:
+                    chain_id = child.attrib.values()[0]
+            if chain_id not in mentions:
+                mentions[chain_id] = []
+            mentions[chain_id].append((mention_start, mention_end, mention_id))
     return mentions
 
 
