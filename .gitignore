@@ -96,3 +96,4 @@ ENV/
 *.txt
 .idea/
 \!data/
+not_relevant/
