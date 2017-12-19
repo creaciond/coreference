@@ -28,6 +28,5 @@ def main():
           "В среднем абзацев в тексте: {:.2f}".format(mean(total_pars)))
 
 
-
 if __name__ == "__main__":
     main()
