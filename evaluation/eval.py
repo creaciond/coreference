@@ -1,49 +1,35 @@
-import numpy as np
-from collections import Counter
-from sklearn.utils.linear_assignment_ import linear_assignment
+import numpy
 
 
-def f1(p_num, p_den, r_num, r_den, beta=1):
-    p = 0 if p_den == 0 else p_num / float(p_den)
-    r = 0 if r_den == 0 else r_num / float(r_den)
-    return 0 if p + r == 0 else (1 + beta * beta) * p * r / (beta * beta * p + r)
+class Bcubed:
+    def __init__(self, cdict, ldict):
+        self.cdict = cdict
+        self.ldict = ldict
 
+    def mult_precision(self, el1, el2):
+        """
+        Computes the multiplicity precision for two elements.
+        """
+        return min(len(self.cdict[el1] & self.cdict[el2]), len(self.ldict[el1] & self.ldict[el2])) \
+            / float(len(self.cdict[el1] & self.cdict[el2]))
 
-class Evaluator:
-    def __init__(self, metric, beta=1):
-        self.p_num = 0
-        self.p_den = 0
-        self.r_num = 0
-        self.r_den = 0
-        self.metric = metric
-        self.beta = beta
+    def mult_recall(self, el1, el2):
+        """
+        Computes the multiplicity recall for two elements.
+        """
+        return min(len(self.cdict[el1] & self.cdict[el2]), len(self.ldict[el1] & self.ldict[el2])) \
+            / float(len(self.ldict[el1] & self.ldict[el2]))
 
-    def get_f1(self):
-        return f1(self.p_num, self.p_den, self.r_num, self.r_den, beta=self.beta)
+    def precision(self):
+        """
+        Computes overall extended BCubed precision for the C and L dicts.
+        """
+        return numpy.mean([numpy.mean([self.mult_precision(el1, el2) \
+            for el2 in self.cdict if self.cdict[el1] & self.cdict[el2]]) for el1 in self.cdict])
 
-    def get_recall(self):
-        return 0 if self.r_num == 0 else self.r_num / float(self.r_den)
-
-    def get_precision(self):
-        return 0 if self.p_num == 0 else self.p_num / float(self.p_den)
-
-    def get_prf(self):
-        return self.get_precision(), self.get_recall(), self.get_f1()
-
-    def get_counts(self):
-        return self.p_num, self.p_den, self.r_num, self.r_den
-
-
-def muc(clusters, mention_to_gold):
-    tp, p = 0, 0
-    for c in clusters:
-        p += len(c) - 1
-        tp += len(c)
-        linked = set()
-        for m in c:
-            if m in mention_to_gold:
-                linked.add(mention_to_gold[m])
-            else:
-                tp -= 1
-        tp -= len(linked)
-    return tp, p
+    def recall(self):
+        """
+        Computes overall extended BCubed recall for the C and L dicts.
+        """
+        return numpy.mean([numpy.mean([self.mult_recall(el1, el2) \
+            for el2 in self.cdict if self.ldict[el1] & self.ldict[el2]]) for el1 in self.cdict])
